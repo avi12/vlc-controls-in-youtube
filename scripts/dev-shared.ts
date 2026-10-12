@@ -11,6 +11,7 @@
  * to start listening, which depends on Node's child_process socket handling.
  */
 
+import { YOUTUBE_PAGE_MATCHES } from "../src/lib/page-matches";
 import { reloadDevEnv } from "./dev-env";
 import chokidar from "chokidar";
 import { createHash } from "node:crypto";
@@ -36,6 +37,7 @@ import { inspect } from "node:util";
 import webExtRun from "web-ext-run";
 import { consoleStream as webExtConsoleStream } from "web-ext-run/util/logger";
 import { build } from "wxt";
+import { MatchPattern } from "wxt/utils/match-patterns";
 
 export const PROJECT_ROOT = resolve(import.meta.dirname, "..");
 export const USER_PROFILES_DIR = resolve(PROJECT_ROOT, "user-profiles");
@@ -184,41 +186,60 @@ export function cloneFile({ source, destination }: {
   }
 }
 
-export function sleep(durationMs: number) {
+function sleep(durationMs: number) {
   return new Promise(resolvePromise => setTimeout(resolvePromise, durationMs));
 }
 
-// Evaluated in the reloaded extension's background: injects its manifest's content scripts (and their CSS) into
-// every open tab they match, as the browser would on load. Each new MAIN-world copy retires the one already running
-// (see src/entrypoints/vlc-controls.content.ts), so the tab keeps playing - reloading it would bring up YouTube
-// Music's "Leave site?" prompt, which only a click can answer. Tab URLs are hidden without the tabs permission, so
-// every tab is tried and the browser refuses the ones outside the content scripts' matches. Chrome holds an
-// injection into a hidden tab until the tab is shown, so only the visible tabs are waited on. Resolves to how many
-// visible tabs were refreshed
-export const INJECT_CONTENT_SCRIPTS_EXPRESSION = `(async () => {
-  const api = globalThis.browser ?? globalThis.chrome;
-  const contentScripts = api.runtime.getManifest().content_scripts ?? [];
-  async function inject(tabId) {
-    for (const { js = [], css = [], world = "ISOLATED", all_frames: allFrames } of contentScripts) {
-      const target = { tabId, allFrames };
-      if (css.length > 0) {
-        await api.scripting.insertCSS({ target, files: css });
-      }
-      await api.scripting.executeScript({ target, files: js, world, injectImmediately: true });
-    }
+// ── Refreshing the open tabs ─────────────────────────────────────────────────
+
+// The same pages the content scripts run on, read from the one list the manifest takes them from
+const YOUTUBE_PAGE_PATTERNS = YOUTUBE_PAGE_MATCHES.map(match => new MatchPattern(match));
+
+export function isYoutubePageUrl(url: string) {
+  return YOUTUBE_PAGE_PATTERNS.some(pattern => pattern.includes(url));
+}
+
+const MAIN_WORLD = "MAIN";
+const DEV_STYLE_ATTRIBUTE = "data-vlc-controls-dev-style";
+
+interface BuiltManifest {
+  content_scripts?: {
+    js?: string[];
+    css?: string[];
+    world?: string;
+  }[];
+}
+
+// The extension's stylesheets leave the open pages with the reload that refreshes them, so each comes back as a
+// <style> tagged with its file and replaced in place on the next rebuild
+function createStyleExpression(styleSheets: string[][]) {
+  return `(() => {
+  for (const [file, text] of ${JSON.stringify(styleSheets)}) {
+    const selector = 'style[${DEV_STYLE_ATTRIBUTE}="' + CSS.escape(file) + '"]';
+    const elStyle = document.querySelector(selector) ?? document.documentElement.appendChild(document.createElement("style"));
+    elStyle.setAttribute("${DEV_STYLE_ATTRIBUTE}", file);
+    elStyle.textContent = text;
   }
-  const visibleInjections = [];
-  for (const { id, active } of await api.tabs.query({})) {
-    const injection = inject(id);
-    if (active) {
-      visibleInjections.push(injection);
-    } else {
-      injection.catch(() => {});
-    }
-  }
-  const results = await Promise.allSettled(visibleInjections);
-  return results.filter(({ status }) => status === "fulfilled").length;
 })()`;
+}
+
+// What an open YouTube page is handed after a rebuild, in order: the stylesheets, then the MAIN-world scripts -
+// the parts that need no extension API, so the debugging protocol can evaluate them with no scripting permission.
+// Each new MAIN-world copy retires the one already running (see src/entrypoints/vlc-controls.content.ts)
+function readPageRefreshExpressions(outputDir: string) {
+  function readOutputFile(file: string) {
+    return readFileSync(join(outputDir, file), "utf-8");
+  }
+
+  const manifest: BuiltManifest = JSON.parse(readOutputFile("manifest.json"));
+  const contentScripts = manifest.content_scripts ?? [];
+  const styleSheets = contentScripts.flatMap(contentScript => contentScript.css ?? [])
+    .map(file => [file, readOutputFile(file)]);
+  const mainWorldScripts = contentScripts.filter(contentScript => contentScript.world === MAIN_WORLD)
+    .flatMap(contentScript => contentScript.js ?? [])
+    .map(file => `${readOutputFile(file)}\n//# sourceURL=${file}`);
+  return [createStyleExpression(styleSheets), ...mainWorldScripts];
+}
 
 // ── Build ────────────────────────────────────────────────────────────────────
 
@@ -306,8 +327,9 @@ export interface LaunchedBrowser {
   debugPort: number;
 }
 
-// What each browser supplies to runDevServer: its isolated profile, how it launches, how to refresh the content
-// scripts in the open YouTube tabs (CDP on Chromium, RDP on Firefox), and optionally how to tell it is still running
+// What each browser supplies to runDevServer: its isolated profile, how it launches, how to evaluate the rebuilt
+// page scripts in the open YouTube tabs (CDP on Chromium, RDP on Firefox) and say how many it reached, and
+// optionally how to tell it is still running
 export interface BrowserTarget {
   name: string;
   wxtBrowser: "chrome" | "firefox" | "opera";
@@ -317,23 +339,32 @@ export interface BrowserTarget {
   prepare?: () => void;
   setupProfile: () => string;
   launch: (profileDirectory: string) => Promise<LaunchedBrowser>;
-  injectIntoYoutubeTabs: (debugPort: number) => Promise<void>;
+  refreshYoutubeTabs: (refresh: {
+    debugPort: number;
+    expressions: string[];
+  }) => Promise<number>;
   // web-ext's own "browser closed" callback is unreliable for Firefox on Windows, so a target can supply a
   // probe; the dev server shuts down once it keeps failing
   isBrowserAlive?: (debugPort: number) => Promise<boolean>;
 }
 
-// Chrome caches content scripts when the extension loads, so even a MAIN-world change needs an extension reload,
-// and that reload orphans the scripts already running in open tabs (neither browser re-injects them), so the
-// rebuilt scripts are injected into the tabs right after it
+// Both browsers read content scripts when the extension loads, so even a MAIN-world change needs an extension
+// reload for the pages loaded after it. The reload orphans the copies already running in open tabs and neither
+// browser re-injects them, so the rebuilt page scripts are evaluated into those tabs right after it - the tab keeps
+// playing, where reloading it would bring up YouTube Music's "Leave site?" prompt, which only a click can answer.
+// The orphaned isolated bridge stays behind: the context menu's tab switch still works through it, but the
+// toolbar's reaches that tab only once it is reloaded
 async function reloadExtensionAndTabs({ target, browser, startedAt }: {
   target: BrowserTarget;
   browser: LaunchedBrowser;
   startedAt: number;
 }) {
   await browser.runner.reloadAllExtensions();
-  await target.injectIntoYoutubeTabs(browser.debugPort);
-  logEvent(`Reloaded the extension and injected it into the YouTube tabs (${msSince(startedAt)})`);
+  const tabCount = await target.refreshYoutubeTabs({
+    debugPort: browser.debugPort,
+    expressions: readPageRefreshExpressions(target.outputDir)
+  });
+  logEvent(`Reloaded the extension and refreshed ${tabCount} open YouTube page(s) in place (${msSince(startedAt)})`);
 }
 
 // web-ext-run's info logs are noise; surface warnings and up

@@ -1,23 +1,20 @@
 /**
  * Chromium dev-server target factory, shared by every Chromium-family browser (Chrome here, Opera in
- * `dev-opera.ts`): profile cloning, sideload launch over web-ext-run, and injecting rebuilt content scripts into
- * the open YouTube tabs over CDP.
+ * `dev-opera.ts`): profile cloning, sideload launch over web-ext-run, and evaluating the rebuilt page scripts
+ * into the open YouTube tabs over CDP.
  *
  * Every Chromium target launches against its OWN cloned `--user-data-dir` under user-profiles/, seeded once
  * from the real profile so the dev browser carries the YouTube session, while closing it never touches the
  * user's real browser.
  */
 
-import { EXTENSION_NAME } from "../wxt.config";
 import {
   type BrowserTarget,
   cloneFile,
   findFreeTcpPort,
-  INJECT_CONTENT_SCRIPTS_EXPRESSION,
+  isYoutubePageUrl,
   LANG_ARGS,
-  logEvent,
   PROJECT_ROOT,
-  sleep,
   START_URL,
   USER_PROFILES_DIR
 } from "./dev-shared";
@@ -115,93 +112,143 @@ function setupChromiumProfile({ profileDir, sourceUserData, sourceProfileName = 
   return profileDir;
 }
 
-// ── Content script injection ─────────────────────────────────────────────────
+// ── Refreshing the open tabs over CDP ────────────────────────────────────────
 
-const SERVICE_WORKER_POLL_MS = 250;
-const SERVICE_WORKER_POLL_ATTEMPTS = 20;
-// A service worker announces itself with events before it replies, so the reply is told apart by its id
-const EVALUATE_REQUEST_ID = 1;
-// A service worker the extension reload replaces mid-request never replies and its socket stays open
-const EVALUATE_TIMEOUT_MS = 5000;
+// A page that stops answering can't hold up the reload of the others
+const TAB_REFRESH_TIMEOUT_MS = 10_000;
+// An embed on another site is a cross-site frame, which Chrome debugs as a target of its own
+const REFRESHED_TARGET_TYPES = new Set(["page", "iframe"]);
 
 interface CdpTarget {
   type?: string;
+  url?: string;
   webSocketDebuggerUrl?: string;
 }
 
-// Resolves to the expression's value, or undefined if it threw, the target went away or it never replied
-function evaluateOverCdp({ webSocketUrl, expression }: {
-  webSocketUrl: string;
-  expression: string;
-}) {
-  return new Promise<unknown>(resolvePromise => {
-    const webSocket = new WebSocket(webSocketUrl);
-    AbortSignal.timeout(EVALUATE_TIMEOUT_MS).addEventListener("abort", () => {
-      webSocket.close();
-      resolvePromise(undefined);
-    });
-    webSocket.onopen = () => webSocket.send(
-      JSON.stringify({
-        id: EVALUATE_REQUEST_ID,
-        method: "Runtime.evaluate",
-        params: {
-          expression,
-          awaitPromise: true,
-          returnByValue: true
-        }
-      })
-    );
-    webSocket.onmessage = e => {
-      const message = JSON.parse(String(e.data));
-      if (message.id !== EVALUATE_REQUEST_ID) {
-        return;
-      }
-
-      webSocket.close();
-      resolvePromise(message.result?.result?.value);
-    };
-    webSocket.onerror = () => resolvePromise(undefined);
-    webSocket.onclose = () => resolvePromise(undefined);
-  });
+interface CdpFrameTree {
+  frame: {
+    id: string;
+    url: string;
+  };
+  childFrames?: CdpFrameTree[];
 }
 
-async function listServiceWorkerUrls(debugPort: number) {
+interface CdpExecutionContext {
+  id: number;
+  auxData?: {
+    isDefault?: boolean;
+    frameId?: string;
+  };
+}
+
+interface CdpMessage {
+  id?: number;
+  method?: string;
+  params?: { context?: CdpExecutionContext };
+  result?: { frameTree?: CdpFrameTree };
+}
+
+function readFrameUrls(frameTree: CdpFrameTree | undefined) {
+  const urlByFrameId = new Map<string, string>();
+  const pendingTrees = frameTree ? [frameTree] : [];
+  for (let tree = pendingTrees.pop(); tree; tree = pendingTrees.pop()) {
+    urlByFrameId.set(tree.frame.id, tree.frame.url);
+    pendingTrees.push(...tree.childFrames ?? []);
+  }
+  return urlByFrameId;
+}
+
+// Every frame of the target that shows a YouTube page gets the rebuilt scripts in its main world - the page's own
+// context, which CDP evaluates in regardless of the page's CSP. Runtime.enable replays one executionContextCreated
+// event per existing context before it replies, so the list is complete by then. Tells whether any frame was reached
+async function refreshTargetOverCdp({ webSocketUrl, expressions }: {
+  webSocketUrl: string;
+  expressions: string[];
+}) {
+  const webSocket = new WebSocket(webSocketUrl);
+  const contexts: CdpExecutionContext[] = [];
+  const replyById = new Map<number, (message: CdpMessage) => void>();
+  let nextId = 1;
+  webSocket.onmessage = e => {
+    const message: CdpMessage = JSON.parse(String(e.data));
+    if (message.method === "Runtime.executionContextCreated" && message.params?.context) {
+      contexts.push(message.params.context);
+    }
+
+    if (message.id === undefined) {
+      return;
+    }
+
+    replyById.get(message.id)?.(message);
+    replyById.delete(message.id);
+  };
+
+  function call(method: string, params: Record<string, unknown> = {}) {
+    return new Promise<CdpMessage>(fulfill => {
+      const id = nextId++;
+      replyById.set(id, fulfill);
+      webSocket.send(
+        JSON.stringify({
+          id,
+          method,
+          params
+        })
+      );
+    });
+  }
+
+  async function refresh() {
+    await new Promise(fulfill => webSocket.addEventListener("open", fulfill, { once: true }));
+    const { result } = await call("Page.getFrameTree");
+    const urlByFrameId = readFrameUrls(result?.frameTree);
+    await call("Runtime.enable");
+    const youtubeContexts = contexts.filter(({ auxData }) => {
+      const frameUrl = auxData?.isDefault && auxData.frameId ? urlByFrameId.get(auxData.frameId) : undefined;
+      return frameUrl !== undefined && isYoutubePageUrl(frameUrl);
+    });
+    for (const { id: contextId } of youtubeContexts) {
+      for (const expression of expressions) {
+        await call("Runtime.evaluate", {
+          expression,
+          contextId
+        });
+      }
+    }
+    return youtubeContexts.length > 0;
+  }
+
+  const timedOut = new Promise<boolean>(fulfill => {
+    AbortSignal.timeout(TAB_REFRESH_TIMEOUT_MS).addEventListener("abort", () => fulfill(false));
+  });
+  try {
+    return await Promise.race([refresh(), timedOut]);
+  } catch {
+    return false;
+  } finally {
+    webSocket.close();
+  }
+}
+
+// Straight from the dev server into each page over its own debugging session, so the extension needs neither the
+// scripting permission nor host access, and a service worker still starting up can't delay it
+async function refreshYoutubeTabsOverCdp({ debugPort, expressions }: {
+  debugPort: number;
+  expressions: string[];
+}) {
   const targets: CdpTarget[] = await fetch(`http://127.0.0.1:${debugPort}/json`)
     .then(response => response.json())
     .catch(() => []);
-  return targets.flatMap(target => target.type === "service_worker" && target.webSocketDebuggerUrl ?
-    [target.webSocketDebuggerUrl] :
-    []);
-}
-
-// The profile's other extensions run service workers too, and the reloaded one takes a moment to start, so each
-// is asked for its name until this extension's own injects the rebuilt scripts
-async function injectIntoYoutubeTabsOverCdp({ debugPort, extensionName }: {
-  debugPort: number;
-  extensionName: string;
-}) {
-  for (let attempt = 0; attempt < SERVICE_WORKER_POLL_ATTEMPTS; attempt++) {
-    for (const webSocketUrl of await listServiceWorkerUrls(debugPort)) {
-      const name = await evaluateOverCdp({
-        webSocketUrl,
-        expression: "chrome.runtime.getManifest().name"
-      });
-      if (name !== extensionName) {
-        continue;
-      }
-
-      const tabCount = await evaluateOverCdp({
-        webSocketUrl,
-        expression: INJECT_CONTENT_SCRIPTS_EXPRESSION
-      });
-      if (typeof tabCount === "number") {
-        logEvent(`Injected the rebuilt content scripts into ${tabCount} YouTube tab(s)`);
-        return;
-      }
-    }
-    await sleep(SERVICE_WORKER_POLL_MS);
-  }
-  logEvent("The extension's service worker never came up - reload the YouTube tabs by hand");
+  const webSocketUrls = targets.flatMap(target => {
+    const isYoutubeTarget = REFRESHED_TARGET_TYPES.has(target.type ?? "") && isYoutubePageUrl(target.url ?? "");
+    return isYoutubeTarget && target.webSocketDebuggerUrl ? [target.webSocketDebuggerUrl] : [];
+  });
+  const results = await Promise.all(
+    webSocketUrls.map(webSocketUrl => refreshTargetOverCdp({
+      webSocketUrl,
+      expressions
+    }))
+  );
+  return results.filter(Boolean).length;
 }
 
 // ── Target factory ───────────────────────────────────────────────────────────
@@ -258,10 +305,7 @@ export function createChromiumTarget(options: ChromiumTargetOptions): BrowserTar
       sourceProfileName: options.sourceProfileName
     }),
     launch,
-    injectIntoYoutubeTabs: debugPort => injectIntoYoutubeTabsOverCdp({
-      debugPort,
-      extensionName: EXTENSION_NAME
-    })
+    refreshYoutubeTabs: refreshYoutubeTabsOverCdp
   };
 }
 
