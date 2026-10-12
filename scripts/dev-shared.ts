@@ -346,6 +346,59 @@ export interface BrowserTarget {
   // web-ext's own "browser closed" callback is unreliable for Firefox on Windows, so a target can supply a
   // probe; the dev server shuts down once it keeps failing
   isBrowserAlive?: (debugPort: number) => Promise<boolean>;
+  // The debugging ids of the extension's running background workers, for a browser whose reload can leave the
+  // extension without one
+  listBackgroundWorkerIds?: (debugPort: number) => Promise<string[]>;
+}
+
+const BACKGROUND_START_TIMEOUT_MS = 5000;
+const BACKGROUND_POLL_INTERVAL_MS = 250;
+const BACKGROUND_START_ATTEMPTS = 3;
+
+async function waitForNewBackgroundWorker({ target, debugPort, previousIds }: {
+  target: BrowserTarget;
+  debugPort: number;
+  previousIds: string[];
+}) {
+  const deadline = Date.now() + BACKGROUND_START_TIMEOUT_MS;
+  while (Date.now() < deadline) {
+    const ids = await target.listBackgroundWorkerIds?.(debugPort) ?? [];
+    const isNewWorkerRunning = ids.some(id => !previousIds.includes(id));
+    if (isNewWorkerRunning) {
+      return true;
+    }
+
+    await sleep(BACKGROUND_POLL_INTERVAL_MS);
+  }
+  return false;
+}
+
+// A reload that lands while the previous reload's service worker is still registering fails that registration
+// ("Status code: 10") and Chrome leaves the extension with no background at all - the toolbar button and the
+// context menu go dead until the next reload - so each reload waits for a fresh worker and retries without one
+async function reloadExtension({ target, browser }: {
+  target: BrowserTarget;
+  browser: LaunchedBrowser;
+}) {
+  if (!target.listBackgroundWorkerIds) {
+    await browser.runner.reloadAllExtensions();
+    return;
+  }
+
+  for (let attempt = 1; attempt <= BACKGROUND_START_ATTEMPTS; attempt++) {
+    const previousIds = await target.listBackgroundWorkerIds(browser.debugPort);
+    await browser.runner.reloadAllExtensions();
+    const isStarted = await waitForNewBackgroundWorker({
+      target,
+      debugPort: browser.debugPort,
+      previousIds
+    });
+    if (isStarted) {
+      return;
+    }
+
+    logEvent(`The extension's background didn't start (attempt ${attempt}/${BACKGROUND_START_ATTEMPTS}) - reloading again`);
+  }
 }
 
 // Both browsers read content scripts when the extension loads, so even a MAIN-world change needs an extension
@@ -359,7 +412,10 @@ async function reloadExtensionAndTabs({ target, browser, startedAt }: {
   browser: LaunchedBrowser;
   startedAt: number;
 }) {
-  await browser.runner.reloadAllExtensions();
+  await reloadExtension({
+    target,
+    browser
+  });
   const tabCount = await target.refreshYoutubeTabs({
     debugPort: browser.debugPort,
     expressions: readPageRefreshExpressions(target.outputDir)

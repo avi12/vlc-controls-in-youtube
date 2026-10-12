@@ -120,6 +120,7 @@ const TAB_REFRESH_TIMEOUT_MS = 10_000;
 const REFRESHED_TARGET_TYPES = new Set(["page", "iframe"]);
 
 interface CdpTarget {
+  id?: string;
   type?: string;
   url?: string;
   webSocketDebuggerUrl?: string;
@@ -251,6 +252,18 @@ async function refreshYoutubeTabsOverCdp({ debugPort, expressions }: {
   return results.filter(Boolean).length;
 }
 
+const EXTENSION_BACKGROUND_URL_PATTERN = /^chrome-extension:\/\/[a-p]{32}\/background\.js$/;
+
+async function listBackgroundWorkerIdsOverCdp(debugPort: number) {
+  const targets: CdpTarget[] = await fetch(`http://127.0.0.1:${debugPort}/json`)
+    .then(response => response.json())
+    .catch(() => []);
+  return targets.flatMap(target => {
+    const isBackgroundWorker = target.type === "service_worker" && EXTENSION_BACKGROUND_URL_PATTERN.test(target.url ?? "");
+    return isBackgroundWorker && target.id ? [target.id] : [];
+  });
+}
+
 // ── Target factory ───────────────────────────────────────────────────────────
 
 export function createChromiumTarget(options: ChromiumTargetOptions): BrowserTarget {
@@ -305,7 +318,8 @@ export function createChromiumTarget(options: ChromiumTargetOptions): BrowserTar
       sourceProfileName: options.sourceProfileName
     }),
     launch,
-    refreshYoutubeTabs: refreshYoutubeTabsOverCdp
+    refreshYoutubeTabs: refreshYoutubeTabsOverCdp,
+    listBackgroundWorkerIds: listBackgroundWorkerIdsOverCdp
   };
 }
 
