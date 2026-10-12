@@ -37,10 +37,6 @@ export const YOUTUBE_NATIVE_SHORTCUTS = {
     section: KeymapSection.General,
     combos: [{ key: "Escape" }]
   },
-  previousFrame: {
-    section: KeymapSection.Playback,
-    combos: [{ key: "," }]
-  },
   seekToPercentage: {
     section: KeymapSection.Playback,
     combos: DIGIT_COMBOS,
@@ -134,6 +130,11 @@ export const YOUTUBE_HOTKEYS = {
     code: "Comma",
     keyCode: 188,
     shiftKey: true
+  },
+  previousFrame: {
+    key: ",",
+    code: "Comma",
+    keyCode: 188
   },
   nextFrame: {
     key: ".",

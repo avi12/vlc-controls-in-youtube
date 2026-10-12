@@ -25,7 +25,7 @@ const DIALOG_ROW_ORDER: DialogRowSource[] = [
   YOUTUBE_NATIVE_SHORTCUTS.nextChapter,
   VlcAction.Previous,
   VlcAction.Next,
-  YOUTUBE_NATIVE_SHORTCUTS.previousFrame,
+  VlcAction.PreviousFrame,
   VlcAction.NextFrame,
   VlcAction.Slower,
   VlcAction.Faster,

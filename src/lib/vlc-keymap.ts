@@ -26,6 +26,7 @@ export enum VlcAction {
   JumpForwardMedium = "jump-forward-medium",
   JumpBackwardLong = "jump-backward-long",
   JumpForwardLong = "jump-forward-long",
+  PreviousFrame = "previous-frame",
   NextFrame = "next-frame",
   VolumeUp = "volume-up",
   VolumeDown = "volume-down",
@@ -238,6 +239,17 @@ export const VLC_BINDINGS: VlcBinding[] = [
     label: "Next video",
     combos: [{ key: "n" }],
     youtubeEquivalent: YOUTUBE_HOTKEYS.next
+  },
+  {
+    action: VlcAction.PreviousFrame,
+    section: KeymapSection.Playback,
+    label: "Previous frame",
+    combos: [{
+      key: "e",
+      isShift: true
+    }],
+    isRepeatable: true,
+    youtubeEquivalent: YOUTUBE_HOTKEYS.previousFrame
   },
   {
     action: VlcAction.NextFrame,

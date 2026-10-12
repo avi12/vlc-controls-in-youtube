@@ -1,7 +1,7 @@
 import { cycleAspectRatio } from "@/lib/hotkeys/actions/aspect-ratio";
 import { cycleAudioTrack } from "@/lib/hotkeys/actions/audio-tracks";
 import { toggleControls } from "@/lib/hotkeys/actions/controls-visibility";
-import { stepFrame } from "@/lib/hotkeys/actions/frame-step";
+import { FrameDirection, stepFrame } from "@/lib/hotkeys/actions/frame-step";
 import { shuffle } from "@/lib/hotkeys/actions/music-queue";
 import {
   playNext,
@@ -39,6 +39,13 @@ function createJumpHandler(action: VlcAction): ActionHandler {
   return player => seekNatively({
     player,
     seconds: JUMP_SECONDS_BY_ACTION.get(action) ?? 0
+  });
+}
+
+function createFrameHandler(direction: FrameDirection): ActionHandler {
+  return player => stepFrame({
+    player,
+    direction
   });
 }
 
@@ -82,7 +89,8 @@ const ACTION_HANDLERS: Record<VlcAction, ActionHandler> = {
   [VlcAction.JumpForwardMedium]: createJumpHandler(VlcAction.JumpForwardMedium),
   [VlcAction.JumpBackwardLong]: createJumpHandler(VlcAction.JumpBackwardLong),
   [VlcAction.JumpForwardLong]: createJumpHandler(VlcAction.JumpForwardLong),
-  [VlcAction.NextFrame]: stepFrame,
+  [VlcAction.PreviousFrame]: createFrameHandler(FrameDirection.Backward),
+  [VlcAction.NextFrame]: createFrameHandler(FrameDirection.Forward),
   [VlcAction.VolumeUp]: createVolumeHandler(VolumeDirection.Louder),
   [VlcAction.VolumeDown]: createVolumeHandler(VolumeDirection.Quieter),
   [VlcAction.ToggleMute]: toggleMute,

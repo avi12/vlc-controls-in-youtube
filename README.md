@@ -32,7 +32,8 @@ Press <kbd>Shift</kbd> + <kbd>/</kbd> on YouTube for the full list in your own l
 | <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>←</kbd>/<kbd>→</kbd> | Jump back/forward 1 minute        |
 |   <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>←</kbd>/<kbd>→</kbd> | Jump back/forward 5 minutes       |
 |                           <kbd>P</kbd>/<kbd>N</kbd> | Previous/next video                          |
-|                                        <kbd>E</kbd> | Next frame (while paused)                    |
+|                                        <kbd>E</kbd> | Next frame                                   |
+|                     <kbd>Shift</kbd> + <kbd>E</kbd> | Previous frame                               |
 |                           <kbd>-</kbd>/<kbd>+</kbd> | Slower/faster                                |
 |                           <kbd>[</kbd>/<kbd>]</kbd> | Slower/faster by 0.1x                        |
 |                                        <kbd>=</kbd> | Normal speed                                 |
@@ -67,7 +68,7 @@ Press <kbd>Shift</kbd> + <kbd>/</kbd> on YouTube for the full list in your own l
 | <kbd>I</kbd>/<kbd>J</kbd>/<kbd>K</kbd>/<kbd>L</kbd> | Pan up/left/down/right |
 
 YouTube keeps its own keys for what VLC doesn't have: <kbd>T</kbd> theater mode, <kbd>0</kbd>-<kbd>9</kbd> seek to a
-percentage, <kbd>,</kbd> previous frame, <kbd>Ctrl</kbd> + <kbd>←</kbd>/<kbd>→</kbd> previous/next chapter and
+percentage, <kbd>Ctrl</kbd> + <kbd>←</kbd>/<kbd>→</kbd> previous/next chapter and
 <kbd>Esc</kbd> to close the miniplayer.
 
 ### YouTube Music
