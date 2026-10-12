@@ -151,6 +151,12 @@ export const YOUTUBE_HOTKEYS = {
     key: "i",
     code: "KeyI",
     keyCode: 73
+  },
+  // Only once the video has ended; V cycles VLC's subtitles, so there it is on Shift+V
+  moreVideos: {
+    key: "v",
+    code: "KeyV",
+    keyCode: 86
   }
 } as const satisfies Record<string, YoutubeHotkey>;
 

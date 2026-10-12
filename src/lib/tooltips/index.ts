@@ -21,6 +21,8 @@ enum ButtonEnterEvent {
 interface ShortcutButton {
   selector: string;
   action: VlcAction | null;
+  // Only its title attribute names the key: it holds other controls, so hovering inside it isn't hovering it
+  isContainer?: boolean;
 }
 
 const SHORTCUT_BUTTONS: ShortcutButton[] = [
@@ -61,16 +63,26 @@ const SHORTCUT_BUTTONS: ShortcutButton[] = [
     action: null
   },
   {
+    selector: ".ytp-fullscreen-grid",
+    action: VlcAction.ShowMoreVideos,
+    isContainer: true
+  },
+  {
     selector: ".ytp-fullscreen-grid-hover-overlay",
-    action: null
+    action: VlcAction.ShowMoreVideos
   },
   {
     selector: ".ytp-fullscreen-grid-expand-button",
-    action: null
+    action: VlcAction.ShowMoreVideos
   }
 ];
 
-const SHORTCUT_BUTTON_SELECTOR = SHORTCUT_BUTTONS.map(button => button.selector).join(",");
+function joinSelectors(buttons: ShortcutButton[]) {
+  return buttons.map(button => button.selector).join(",");
+}
+
+const SHORTCUT_BUTTON_SELECTOR = joinSelectors(SHORTCUT_BUTTONS);
+const HOVERABLE_BUTTON_SELECTOR = joinSelectors(SHORTCUT_BUTTONS.filter(button => !button.isContainer));
 const TOOLTIP_TEXT_SELECTOR = ".ytp-tooltip-text";
 const SHORTCUT_SUFFIX_PATTERN = /\s*\([^()]*\)\s*$/;
 const TOOLTIP_ATTRIBUTES = Object.values(TooltipAttribute);
@@ -232,7 +244,7 @@ function observeTooltipText(elButton: Element) {
 
 function handleButtonEnter(e: Event) {
   const elTarget = e.target;
-  const elButton = elTarget instanceof Element ? elTarget.closest(SHORTCUT_BUTTON_SELECTOR) : null;
+  const elButton = elTarget instanceof Element ? elTarget.closest(HOVERABLE_BUTTON_SELECTOR) : null;
   elHoveredButton = elButton;
 
   if (!elButton) {

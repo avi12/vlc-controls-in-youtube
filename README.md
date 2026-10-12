@@ -52,6 +52,7 @@ Press <kbd>Shift</kbd> + <kbd>/</kbd> on YouTube for the full list in your own l
 |             <kbd>Shift</kbd> + <kbd>S</kbd> | Take snapshot                              |
 |              <kbd>Ctrl</kbd> + <kbd>H</kbd> | Hide/show controls                         |
 |                                <kbd>I</kbd> | Toggle miniplayer (<kbd>Shift</kbd> + <kbd>I</kbd> on 360° videos) |
+|             <kbd>Shift</kbd> + <kbd>V</kbd> | Show more videos once the video ends       |
 
 ### Subtitles
 

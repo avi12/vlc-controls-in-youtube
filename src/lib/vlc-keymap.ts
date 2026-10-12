@@ -45,6 +45,7 @@ export enum VlcAction {
   Snapshot = "snapshot",
   ToggleControls = "toggle-controls",
   ToggleMiniplayer = "toggle-miniplayer",
+  ShowMoreVideos = "show-more-videos",
   ZoomIn360 = "zoom-in-360",
   ZoomOut360 = "zoom-out-360",
   PanUp360 = "pan-up-360",
@@ -343,6 +344,17 @@ export const VLC_BINDINGS: VlcBinding[] = [
     }],
     site: Site.Youtube,
     youtubeEquivalent: YOUTUBE_HOTKEYS.miniplayer
+  },
+  {
+    action: VlcAction.ShowMoreVideos,
+    section: KeymapSection.General,
+    label: "Show more videos at the end",
+    combos: [{
+      key: "v",
+      isShift: true
+    }],
+    site: Site.Youtube,
+    youtubeEquivalent: YOUTUBE_HOTKEYS.moreVideos
   },
   {
     action: VlcAction.ToggleMute,

@@ -38,6 +38,7 @@ const DIALOG_ROW_ORDER: DialogRowSource[] = [
   YOUTUBE_NATIVE_SHORTCUTS.theaterMode,
   VlcAction.ToggleMiniplayer,
   YOUTUBE_NATIVE_SHORTCUTS.closeMiniplayerOrDialog,
+  VlcAction.ShowMoreVideos,
   YOUTUBE_MUSIC_NATIVE_SHORTCUTS.toggleQueue,
   VlcAction.ToggleMute,
   VlcAction.VolumeUp,

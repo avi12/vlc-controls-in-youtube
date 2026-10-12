@@ -96,3 +96,10 @@ export function toggleMiniplayer(player: YoutubePlayer) {
     hotkey: YOUTUBE_HOTKEYS.miniplayer
   });
 }
+
+export function showMoreVideos(player: YoutubePlayer) {
+  dispatchYoutubeHotkey({
+    player,
+    hotkey: YOUTUBE_HOTKEYS.moreVideos
+  });
+}

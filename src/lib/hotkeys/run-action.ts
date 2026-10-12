@@ -6,6 +6,7 @@ import { shuffle } from "@/lib/hotkeys/actions/music-queue";
 import {
   playNext,
   playPrevious,
+  showMoreVideos,
   stop,
   toggleFullscreen,
   toggleLoop,
@@ -120,6 +121,7 @@ const ACTION_HANDLERS: Record<VlcAction, ActionHandler> = {
   [VlcAction.Snapshot]: takeSnapshot,
   [VlcAction.ToggleControls]: toggleControls,
   [VlcAction.ToggleMiniplayer]: toggleMiniplayer,
+  [VlcAction.ShowMoreVideos]: showMoreVideos,
   [VlcAction.ZoomIn360]: createHoldHandler(VlcAction.ZoomIn360),
   [VlcAction.ZoomOut360]: createHoldHandler(VlcAction.ZoomOut360),
   [VlcAction.PanUp360]: createHoldHandler(VlcAction.PanUp360),
