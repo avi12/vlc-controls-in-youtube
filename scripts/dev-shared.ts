@@ -431,7 +431,9 @@ export async function runDevServer(target: BrowserTarget) {
     pending.filePath = filePath;
     pending.isEnvChange ||= envFiles.includes(filePath.replaceAll("\\", "/"));
     clearTimeout(debounceTimer);
-    debounceTimer = setTimeout(() => void drainPendingRebuild(), REBUILD_DEBOUNCE_MS);
+    debounceTimer = setTimeout(async () => {
+      await drainPendingRebuild();
+    }, REBUILD_DEBOUNCE_MS);
   }
 
   // Polling compares mtime/size snapshots, so file reads (the build itself, the TS server, a project-wide
@@ -467,15 +469,15 @@ export async function runDevServer(target: BrowserTarget) {
   }
 
   for (const signal of ["SIGINT", "SIGTERM"] as const) {
-    process.on(signal, () => {
+    process.on(signal, async () => {
       logEvent(`Received ${signal}`);
-      void exit();
+      await exit();
     });
   }
 
-  browser.runner.registerCleanup(() => {
+  browser.runner.registerCleanup(async () => {
     logEvent(`${target.name} closed`);
-    void exit();
+    await exit();
   });
 
   // A short streak of failed probes (not one blip) ends the session, so a hiccup during a reload never does
@@ -499,12 +501,12 @@ export async function runDevServer(target: BrowserTarget) {
 
       if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
         logEvent(`${target.name} is no longer reachable - shutting down`);
-        void exit();
+        await exit();
         return;
       }
     }
   }
-  void monitorBrowserLiveness();
+  await monitorBrowserLiveness();
 
   await new Promise(() => {});
 }

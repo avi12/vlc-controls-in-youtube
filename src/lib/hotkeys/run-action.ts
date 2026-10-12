@@ -23,7 +23,8 @@ import { JUMP_SECONDS_BY_ACTION, VLC_BINDINGS, VlcAction, type VlcBinding } from
 
 // An action YouTube performs for as long as its key is held hands back the release of that key
 type ReleaseKey = () => void;
-type ActionHandler = (player: YoutubePlayer) => ReleaseKey | void;
+// An action that has to wait for YouTube (switching a subtitle track waits for YouTube's own caption key) runs on
+type ActionHandler = (player: YoutubePlayer) => ReleaseKey | Promise<void> | void;
 
 // Holds the binding's YouTube key down until the viewer lets go of the VLC key
 function createHoldHandler(action: VlcAction): ActionHandler {

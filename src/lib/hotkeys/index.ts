@@ -102,7 +102,7 @@ function onKeyDown(e: KeyboardEvent) {
       player,
       isRepeat: e.repeat
     });
-    if (release) {
+    if (typeof release === "function") {
       releaseByKeyCode.set(e.code, release);
     }
 

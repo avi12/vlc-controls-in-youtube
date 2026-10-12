@@ -17,13 +17,19 @@ async function syncToolbar() {
   await reflectEnabledState(await isEnabledItem.getValue());
 }
 
-export default defineBackground(() => {
+export default defineBackground(async () => {
   browser.action.onClicked.addListener(async () => {
     await isEnabledItem.setValue(!(await isEnabledItem.getValue()));
   });
 
-  isEnabledItem.watch(isEnabled => void reflectEnabledState(isEnabled));
-  browser.runtime.onInstalled.addListener(() => void syncToolbar());
-  browser.runtime.onStartup.addListener(() => void syncToolbar());
-  void syncToolbar();
+  isEnabledItem.watch(async isEnabled => {
+    await reflectEnabledState(isEnabled);
+  });
+  browser.runtime.onInstalled.addListener(async () => {
+    await syncToolbar();
+  });
+  browser.runtime.onStartup.addListener(async () => {
+    await syncToolbar();
+  });
+  await syncToolbar();
 });

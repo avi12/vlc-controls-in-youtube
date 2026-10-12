@@ -216,7 +216,7 @@ async function selectTrack({ player, track }: {
 }
 
 // VLC cycles off -> each track -> off, where YouTube's own caption key only toggles
-export function cycleSubtitles({ player, direction }: {
+export async function cycleSubtitles({ player, direction }: {
   player: YoutubePlayer;
   direction: CycleDirection;
 }) {
@@ -241,7 +241,7 @@ export function cycleSubtitles({ player, direction }: {
     return;
   }
 
-  void selectTrack({
+  await selectTrack({
     player,
     track
   });

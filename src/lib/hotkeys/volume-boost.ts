@@ -23,31 +23,20 @@ function endBoostWhenYoutubeLowersVolume({ player, gain }: {
 
 // The video is routed into the audio context only once the context is running: routed into a context the browser
 // keeps suspended, it would go silent. Firefox starts a context a beat after creating it, Chrome right away
-function routeVideoWhenRunning({ context, elVideo, gain }: {
+async function routeVideoWhenRunning({ context, elVideo, gain }: {
   context: AudioContext;
   elVideo: HTMLVideoElement;
   gain: GainNode;
 }) {
-  function routeVideo() {
-    context.createMediaElementSource(elVideo).connect(gain).connect(context.destination);
+  if (context.state !== "running") {
+    await context.resume();
   }
 
-  if (context.state === "running") {
-    routeVideo();
+  if (context.state !== "running") {
     return;
   }
 
-  function routeVideoOnStart() {
-    if (context.state !== "running") {
-      return;
-    }
-
-    context.removeEventListener("statechange", routeVideoOnStart);
-    routeVideo();
-  }
-
-  context.addEventListener("statechange", routeVideoOnStart);
-  void context.resume();
+  context.createMediaElementSource(elVideo).connect(gain).connect(context.destination);
 }
 
 // A media element can be routed through audio processing only once. Browsers start an audio context only on a page
@@ -67,10 +56,14 @@ function connectGain({ player, elVideo }: {
 
   const context = new AudioContext();
   const gain = context.createGain();
-  routeVideoWhenRunning({
-    context,
-    elVideo,
-    gain
+  // The gain is handed back at once and the video joins the graph as soon as the context is running, so the
+  // volume this boost was asked for is already set by the time any sound goes through it
+  queueMicrotask(async () => {
+    await routeVideoWhenRunning({
+      context,
+      elVideo,
+      gain
+    });
   });
   gainsByVideo.set(elVideo, gain);
   elVideo.addEventListener(
