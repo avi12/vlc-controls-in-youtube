@@ -39,6 +39,18 @@ export function onEnabledChange(callback: EnabledChangeCallback) {
   });
 }
 
+// Wraps a page observer's callback so it falls silent once this copy retires. Left running, a retired copy's
+// observer undoes each change the newer copy makes, which wakes the newer copy's observer to redo it - forever
+export function unlessRetired<T extends unknown[]>(callback: (...parameters: T) => void) {
+  return (...parameters: T) => {
+    if (isRetired) {
+      return;
+    }
+
+    callback(...parameters);
+  };
+}
+
 // From then on this copy acts as switched off for good: it undoes everything it changed, as switching off does,
 // and its listeners go inert, so the newer copy starts from YouTube's own page
 export function retire() {

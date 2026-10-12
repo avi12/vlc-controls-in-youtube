@@ -1,5 +1,5 @@
 import { applyOverride, createOverrideRecords, type OverrideSlot, restoreOverride } from "@/lib/dom-overrides";
-import { isVlcControlsEnabled, onEnabledChange } from "@/lib/enabled-flag";
+import { isVlcControlsEnabled, onEnabledChange, unlessRetired } from "@/lib/enabled-flag";
 import { PLAYER_SELECTOR } from "@/lib/player";
 import { ShortcutStyle } from "@/lib/shortcut";
 import { formatActionShortcut, VlcAction } from "@/lib/vlc-keymap";
@@ -223,7 +223,7 @@ function observeTooltipText(elButton: Element) {
   }
 
   observedTooltipTexts.add(elText);
-  new MutationObserver(() => syncTooltipText(elText)).observe(elText, {
+  new MutationObserver(unlessRetired(() => syncTooltipText(elText))).observe(elText, {
     childList: true,
     characterData: true,
     subtree: true
@@ -257,13 +257,13 @@ function handleAttributeMutations(mutations: MutationRecord[]) {
 
 // documentElement exists at document_start, so the subtree observer covers <body> before it is parsed
 export function installTooltipOverrides() {
-  new MutationObserver(handleAttributeMutations).observe(document.documentElement, {
+  new MutationObserver(unlessRetired(handleAttributeMutations)).observe(document.documentElement, {
     attributes: true,
     subtree: true,
     attributeFilter: TOOLTIP_ATTRIBUTES
   });
   for (const eventName of Object.values(ButtonEnterEvent)) {
-    document.addEventListener(eventName, handleButtonEnter, {
+    document.addEventListener(eventName, unlessRetired(handleButtonEnter), {
       capture: true,
       passive: true
     });

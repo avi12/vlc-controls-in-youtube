@@ -1,4 +1,4 @@
-import { isVlcControlsEnabled, onEnabledChange } from "@/lib/enabled-flag";
+import { isVlcControlsEnabled, onEnabledChange, unlessRetired } from "@/lib/enabled-flag";
 import { isRendererDialog, syncDialogData } from "@/lib/help-dialog/data-override";
 import { applyDomFallback, removeDomFallback } from "@/lib/help-dialog/dom-fallback";
 import { getSite, Site } from "@/lib/site";
@@ -68,7 +68,7 @@ function waitForDialogHost(onFound: (elHost: Element) => void) {
 // YouTube mounts the dialog lazily on the first Shift+/ and may reassign its data on reopen
 export function installHelpDialogOverride() {
   waitForDialogHost(elHost => {
-    new MutationObserver(syncAllDialogs).observe(elHost, {
+    new MutationObserver(unlessRetired(syncAllDialogs)).observe(elHost, {
       childList: true,
       subtree: true
     });
