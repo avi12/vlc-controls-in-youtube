@@ -1,9 +1,6 @@
 import { functionSchema } from "@/lib/player";
+import { hasOwnMethods, onPlayerNamespace, type PlayerNamespace } from "@/lib/player-namespace";
 import { createTypeGuard, z } from "@/lib/zod";
-
-// The global YouTube's player script (base.js) declares and fills with its classes:
-// `var _yt_player={};(function(g){...})(_yt_player)`
-const YOUTUBE_PLAYER_NAMESPACE = "_yt_player";
 
 interface BezelRegistry {
   bezelsByLayer: WeakMap<Element, BezelComponent>;
@@ -11,8 +8,6 @@ interface BezelRegistry {
 }
 
 declare global {
-
-  var _yt_player: unknown;
 
   var vlcControlsBezelRegistry: BezelRegistry | undefined;
 }
@@ -59,10 +54,10 @@ const isBezelTimer = createTypeGuard<BezelTimer>(
 );
 
 const isBezelClass = createTypeGuard<BezelClass>(
-  z.custom(value => {
-    const isClass = typeof value === "function" && typeof value.prototype === "object";
-    return isClass && BEZEL_OWN_METHODS.every(method => Object.hasOwn(value.prototype, method));
-  })
+  z.custom(value => hasOwnMethods({
+    value,
+    methodNames: BEZEL_OWN_METHODS
+  }))
 );
 
 // Kept on the page rather than in this script: a newer copy of the script (the extension reloaded or updated into an
@@ -88,11 +83,7 @@ function endTextOnlyStatus(bezel: unknown) {
 
 // Each bezel is recorded as it hides (its constructor's first call) or shows. The original method still
 // runs, with the same arguments and result
-function recordBezelInstances(namespace: unknown) {
-  if (typeof namespace !== "object" || namespace === null) {
-    return;
-  }
-
+function recordBezelInstances(namespace: PlayerNamespace) {
   const BezelClass = Object.values(namespace).find(isBezelClass);
   if (!BezelClass) {
     return;
@@ -112,30 +103,14 @@ function recordBezelInstances(namespace: unknown) {
   registry.bezelPrototype = prototype;
 }
 
-// Runs at document_start, before base.js: the accessor catches base.js assigning the namespace, hands it
-// straight back as a plain value, and records the bezel class once base.js has finished filling it in
+// A newer copy of this script (the extension reloaded into an open tab) inherits the registry, so YouTube's
+// bezel methods are never wrapped a second time
 export function installBezelRegistry() {
   if (registry.bezelPrototype) {
     return;
   }
 
-  if (globalThis._yt_player) {
-    recordBezelInstances(globalThis._yt_player);
-    return;
-  }
-
-  Object.defineProperty(globalThis, YOUTUBE_PLAYER_NAMESPACE, {
-    configurable: true,
-    set(namespace: unknown) {
-      Object.defineProperty(globalThis, YOUTUBE_PLAYER_NAMESPACE, {
-        configurable: true,
-        enumerable: true,
-        writable: true,
-        value: namespace
-      });
-      queueMicrotask(() => recordBezelInstances(namespace));
-    }
-  });
+  onPlayerNamespace(recordBezelInstances);
 }
 
 // The embedded player has no bezel
