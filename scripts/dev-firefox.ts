@@ -113,7 +113,7 @@ function findDefaultFirefoxProfile() {
   }
 
   const defaultSection = ini.split(/(?=^\[Profile\d)/m).find(section => /^Default=1$/m.test(section));
-  const profilePath = defaultSection?.match(/^Path=(.+)$/m)?.[1].trim();
+  const profilePath = defaultSection?.match(/^Path=(.+)$/m)?.[1]?.trim();
   if (!defaultSection || !profilePath) {
     return undefined;
   }
@@ -216,7 +216,7 @@ async function connectRdp(port: number) {
       buffer = buffer.subarray(iColon + 1 + length);
       const iWaiter = waiters.findIndex(waiter => waiter.isMatch(packet));
       if (iWaiter !== -1) {
-        waiters.splice(iWaiter, 1)[0].fulfill(packet);
+        waiters.splice(iWaiter, 1)[0]?.fulfill(packet);
       }
     }
   });

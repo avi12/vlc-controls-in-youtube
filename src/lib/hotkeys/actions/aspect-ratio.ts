@@ -52,7 +52,10 @@ export const ASPECT_RATIOS = [
   }
 ] as const;
 
-let iAspectRatio = 0;
+type AspectRatio = typeof ASPECT_RATIOS[number];
+
+const [DEFAULT_ASPECT_RATIO] = ASPECT_RATIOS;
+let currentAspectRatio: AspectRatio = DEFAULT_ASPECT_RATIO;
 let resizeObserver: ResizeObserver | null = null;
 
 function toPixels(value: number) {
@@ -93,7 +96,7 @@ function clearAspectRatio(elPlayer: HTMLElement) {
 }
 
 export function resetAspectRatio() {
-  iAspectRatio = 0;
+  currentAspectRatio = DEFAULT_ASPECT_RATIO;
   resizeObserver?.disconnect();
   resizeObserver = null;
   for (const elPlayer of document.querySelectorAll(`.${ASPECT_RATIO_CLASS}`)) {
@@ -104,14 +107,14 @@ export function resetAspectRatio() {
 }
 
 export function getAspectRatioLabel() {
-  return ASPECT_RATIOS[iAspectRatio].label;
+  return currentAspectRatio.label;
 }
 
 // YouTube draws a 360° video onto its own canvas with no setting for the view's shape, so there the aspect ratio
 // is left alone rather than stretching the view
-function applyAspectRatio({ player, iRatio }: {
+function applyAspectRatio({ player, aspectRatio }: {
   player: YoutubePlayer;
-  iRatio: number;
+  aspectRatio: AspectRatio;
 }) {
   if (isSphericalVideo(player)) {
     showStatusInNativeBezel({
@@ -121,9 +124,9 @@ function applyAspectRatio({ player, iRatio }: {
     return;
   }
 
-  const { label, ratio } = ASPECT_RATIOS[iRatio];
+  const { label, ratio } = aspectRatio;
   resetAspectRatio();
-  iAspectRatio = iRatio;
+  currentAspectRatio = aspectRatio;
   showStatusInNativeBezel({
     player,
     text: `${ASPECT_RATIO_STATUS_PREFIX}${label}`
@@ -142,9 +145,10 @@ function applyAspectRatio({ player, iRatio }: {
 }
 
 export function cycleAspectRatio(player: YoutubePlayer) {
+  const iNext = (ASPECT_RATIOS.indexOf(currentAspectRatio) + 1) % ASPECT_RATIOS.length;
   applyAspectRatio({
     player,
-    iRatio: (iAspectRatio + 1) % ASPECT_RATIOS.length
+    aspectRatio: ASPECT_RATIOS[iNext] ?? DEFAULT_ASPECT_RATIO
   });
 }
 
@@ -152,14 +156,14 @@ export function selectAspectRatio({ player, label }: {
   player: YoutubePlayer;
   label: string;
 }) {
-  const iRatio = ASPECT_RATIOS.findIndex(aspectRatio => aspectRatio.label === label);
-  if (iRatio === -1) {
+  const aspectRatio = ASPECT_RATIOS.find(option => option.label === label);
+  if (!aspectRatio) {
     return;
   }
 
   applyAspectRatio({
     player,
-    iRatio
+    aspectRatio
   });
 }
 

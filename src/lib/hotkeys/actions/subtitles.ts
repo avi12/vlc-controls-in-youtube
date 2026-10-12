@@ -54,7 +54,7 @@ const moduleTrackSchema = z.looseObject({
 type ResponseTrack = z.infer<typeof responseTrackSchema>;
 
 function getPrimaryLanguage(languageCode: string) {
-  return languageCode.split("-")[0].toLowerCase();
+  return languageCode.replace(/-.*/, "").toLowerCase();
 }
 
 // The tracklist the captions module reports can lag behind (it showed a pre-roll ad's tracks),
