@@ -12,8 +12,8 @@ enum VideoBoxProperty {
   Height = "--vlc-controls-video-height"
 }
 
-// VLC's aspect ratio menu, in its cycle order
-const ASPECT_RATIOS = [
+// VLC's aspect ratio menu, in its cycle order - the same list the right-click menu offers
+export const ASPECT_RATIOS = [
   {
     label: "Default",
     ratio: null
@@ -103,9 +103,16 @@ export function resetAspectRatio() {
   }
 }
 
+export function getAspectRatioLabel() {
+  return ASPECT_RATIOS[iAspectRatio].label;
+}
+
 // YouTube draws a 360° video onto its own canvas with no setting for the view's shape, so there the aspect ratio
 // is left alone rather than stretching the view
-export function cycleAspectRatio(player: YoutubePlayer) {
+function applyAspectRatio({ player, iRatio }: {
+  player: YoutubePlayer;
+  iRatio: number;
+}) {
   if (isSphericalVideo(player)) {
     showStatusInNativeBezel({
       player,
@@ -114,10 +121,9 @@ export function cycleAspectRatio(player: YoutubePlayer) {
     return;
   }
 
-  const iNext = (iAspectRatio + 1) % ASPECT_RATIOS.length;
-  const { label, ratio } = ASPECT_RATIOS[iNext];
+  const { label, ratio } = ASPECT_RATIOS[iRatio];
   resetAspectRatio();
-  iAspectRatio = iNext;
+  iAspectRatio = iRatio;
   showStatusInNativeBezel({
     player,
     text: `${ASPECT_RATIO_STATUS_PREFIX}${label}`
@@ -133,6 +139,28 @@ export function cycleAspectRatio(player: YoutubePlayer) {
     ratio
   }));
   resizeObserver.observe(player);
+}
+
+export function cycleAspectRatio(player: YoutubePlayer) {
+  applyAspectRatio({
+    player,
+    iRatio: (iAspectRatio + 1) % ASPECT_RATIOS.length
+  });
+}
+
+export function selectAspectRatio({ player, label }: {
+  player: YoutubePlayer;
+  label: string;
+}) {
+  const iRatio = ASPECT_RATIOS.findIndex(aspectRatio => aspectRatio.label === label);
+  if (iRatio === -1) {
+    return;
+  }
+
+  applyAspectRatio({
+    player,
+    iRatio
+  });
 }
 
 export function installAspectRatioReset() {

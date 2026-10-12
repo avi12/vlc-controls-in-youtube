@@ -9,6 +9,8 @@ export enum CycleDirection {
 }
 
 const CAPTIONS_MODULE = "captions";
+// Where VLC's subtitle menu starts, since YouTube's own caption list has no row for it
+const SUBTITLES_OFF_LABEL = "Off";
 const AUTO_GENERATED_KIND = "asr";
 const OFF_POSITION = -1;
 const NATIVE_TOGGLE_TIMEOUT_MS = 1000;
@@ -23,7 +25,14 @@ enum CaptionsOption {
 const responseTrackSchema = z.looseObject({
   languageCode: z.string().min(1),
   vssId: z.string().min(1),
-  kind: z.string().optional()
+  kind: z.string().optional(),
+  name: z.unknown().optional()
+});
+
+// YouTube's own (localized) name for the track, written as plain text or as a run of pieces
+const trackNameSchema = z.looseObject({
+  simpleText: z.string().min(1).optional(),
+  runs: z.array(z.looseObject({ text: z.string() })).optional()
 });
 
 const playerResponseSchema = z.looseObject({
@@ -215,18 +224,68 @@ async function selectTrack({ player, track }: {
   );
 }
 
+function readOrderedTracks(player: YoutubePlayer) {
+  const videoTracks = readVideoTracks(player);
+  return videoTracks ? orderTracks(videoTracks) : [];
+}
+
+function readTrackLabel(track: ResponseTrack) {
+  const parsed = trackNameSchema.safeParse(track.name);
+  if (!parsed.success) {
+    return track.languageCode;
+  }
+
+  const runsText = parsed.data.runs?.map(run => run.text).join("");
+  return parsed.data.simpleText ?? (runsText || track.languageCode);
+}
+
+export function getSubtitleLabels(player: YoutubePlayer) {
+  const labels = readOrderedTracks(player).map(readTrackLabel);
+  return labels.length === 0 ? [] : [SUBTITLES_OFF_LABEL, ...labels];
+}
+
+export function getActiveSubtitleLabel(player: YoutubePlayer) {
+  const activeVssId = getActiveVssId(player);
+  const activeTrack = readOrderedTracks(player).find(track => track.vssId === activeVssId);
+  return activeTrack ? readTrackLabel(activeTrack) : SUBTITLES_OFF_LABEL;
+}
+
+// The right-click menu picks a track by its name, where the key cycles through them
+export async function selectSubtitleLabel({ player, label }: {
+  player: YoutubePlayer;
+  label: string;
+}) {
+  const isTurningOff = label === SUBTITLES_OFF_LABEL;
+  if (isTurningOff) {
+    if (getActiveVssId(player) !== null) {
+      toggleNativeCaptions(player);
+    }
+
+    return;
+  }
+
+  const track = readOrderedTracks(player).find(candidate => readTrackLabel(candidate) === label);
+  if (!track) {
+    return;
+  }
+
+  await selectTrack({
+    player,
+    track
+  });
+}
+
 // VLC cycles off -> each track -> off, where YouTube's own caption key only toggles
 export async function cycleSubtitles({ player, direction }: {
   player: YoutubePlayer;
   direction: CycleDirection;
 }) {
-  const videoTracks = readVideoTracks(player);
-  if (!videoTracks || videoTracks.tracks.length === 0) {
+  const tracks = readOrderedTracks(player);
+  if (tracks.length === 0) {
     toggleNativeCaptions(player);
     return;
   }
 
-  const tracks = orderTracks(videoTracks);
   const position = getNextPosition({
     position: getActivePosition({
       player,

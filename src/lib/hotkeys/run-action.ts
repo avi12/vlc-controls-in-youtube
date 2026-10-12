@@ -19,7 +19,7 @@ import { stepVolume, toggleMute, VolumeDirection } from "@/lib/hotkeys/actions/v
 import { seekNatively } from "@/lib/hotkeys/native/seek";
 import { holdYoutubeHotkey } from "@/lib/hotkeys/youtube-hotkey-dispatch";
 import type { YoutubePlayer } from "@/lib/player";
-import { JUMP_SECONDS_BY_ACTION, VLC_BINDINGS, VlcAction, type VlcBinding } from "@/lib/vlc-keymap";
+import { findBinding, JUMP_SECONDS_BY_ACTION, VlcAction, type VlcBinding } from "@/lib/vlc-keymap";
 
 // An action YouTube performs for as long as its key is held hands back the release of that key
 type ReleaseKey = () => void;
@@ -28,7 +28,7 @@ type ActionHandler = (player: YoutubePlayer) => ReleaseKey | Promise<void> | voi
 
 // Holds the binding's YouTube key down until the viewer lets go of the VLC key
 function createHoldHandler(action: VlcAction): ActionHandler {
-  const hotkey = VLC_BINDINGS.find(binding => binding.action === action)?.youtubeEquivalent;
+  const hotkey = findBinding(action)?.youtubeEquivalent;
   return player => hotkey && holdYoutubeHotkey({
     player,
     hotkey

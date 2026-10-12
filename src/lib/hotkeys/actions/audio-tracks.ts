@@ -54,9 +54,45 @@ function showTrack({ player, track }: {
   });
 }
 
-export function cycleAudioTrack(player: YoutubePlayer) {
+// Only a track YouTube names can be told apart in a menu or a bezel, so the unnamed ones are left out
+function readNamedTracks(player: YoutubePlayer) {
   const parsedTracks = z.array(z.unknown()).safeParse(player.getAvailableAudioTracks?.());
   const tracks = parsedTracks.success ? parsedTracks.data : [];
+  return tracks.flatMap(track => {
+    const name = readTrackName(track);
+    return name ? [{
+      track,
+      name
+    }] : [];
+  });
+}
+
+export function getAudioTrackNames(player: YoutubePlayer) {
+  return readNamedTracks(player).map(({ name }) => name);
+}
+
+export function getActiveAudioTrackName(player: YoutubePlayer) {
+  return readTrackName(player.getAudioTrack?.()) ?? null;
+}
+
+export function selectAudioTrack({ player, name }: {
+  player: YoutubePlayer;
+  name: string;
+}) {
+  const namedTrack = readNamedTracks(player).find(candidate => candidate.name === name);
+  if (!namedTrack || !player.setAudioTrack) {
+    return;
+  }
+
+  player.setAudioTrack(namedTrack.track);
+  showTrack({
+    player,
+    track: namedTrack.track
+  });
+}
+
+export function cycleAudioTrack(player: YoutubePlayer) {
+  const tracks = readNamedTracks(player).map(({ track }) => track);
   const activeTrack = player.getAudioTrack?.();
   if (!player.setAudioTrack || tracks.length < MULTIPLE_TRACKS_MIN) {
     showTrack({

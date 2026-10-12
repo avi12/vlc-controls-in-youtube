@@ -471,11 +471,15 @@ export function findBindings(e: KeyboardEvent) {
   })));
 }
 
+export function findBinding(action: VlcAction) {
+  return VLC_BINDINGS.find(binding => binding.action === action) ?? null;
+}
+
 export function formatActionShortcut({ action, style }: {
   action: VlcAction;
   style: ShortcutStyle;
 }) {
-  const binding = VLC_BINDINGS.find(candidate => candidate.action === action);
+  const binding = findBinding(action);
   if (!binding) {
     return null;
   }

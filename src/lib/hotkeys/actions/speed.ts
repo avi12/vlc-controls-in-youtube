@@ -89,6 +89,33 @@ export function stepFineSpeed({ player, direction }: {
   });
 }
 
+// The right-click menu offers YouTube's own preset rates, named the way YouTube's speed bezel names them
+export function getSpeedLabels(player: YoutubePlayer) {
+  return player.getAvailablePlaybackRates().map(formatRate);
+}
+
+export function getSpeedLabel(player: YoutubePlayer) {
+  return formatRate(roundRate(getCurrentRate(player)));
+}
+
+export function selectSpeedLabel({ player, label }: {
+  player: YoutubePlayer;
+  label: string;
+}) {
+  const rate = player.getAvailablePlaybackRates().find(candidate => formatRate(candidate) === label);
+  if (rate === undefined) {
+    return;
+  }
+
+  showRateInNativeBezel({
+    player,
+    applyRate: () => applyRate({
+      player,
+      rate
+    })
+  });
+}
+
 export function resetSpeed(player: YoutubePlayer) {
   showRateInNativeBezel({
     player,
