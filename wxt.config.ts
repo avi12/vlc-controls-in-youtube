@@ -95,8 +95,10 @@ export default defineConfig({
   outDir: "build",
   outDirTemplate: "{{browser}}-mv{{manifestVersion}}-{{mode}}",
   zip: {
-    // user-profiles/ holds the dev browsers' cloned profiles (cookies, tokens) and is locked while they run
+    // user-profiles/ holds the dev browsers' cloned profiles (cookies, tokens) and is locked while they run, and
+    // keys/ holds the private key the CRX is signed with
     excludeSources: [
+      "keys/**",
       "build/**",
       ".output/**",
       "*.env",
