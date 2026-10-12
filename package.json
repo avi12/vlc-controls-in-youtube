@@ -1,6 +1,6 @@
 {
   "name": "vlc-shortcuts-for-youtube",
-  "version": "0.0.4",
+  "version": "0.1.0",
   "type": "module",
   "description": "VLC's keyboard controls in YouTube's player",
   "imports": {
