@@ -1,3 +1,4 @@
+import { installContextMenu } from "@/lib/context-menu";
 import { retire } from "@/lib/enabled-flag";
 import { installHelpDialogOverride } from "@/lib/help-dialog";
 import { installHotkeys } from "@/lib/hotkeys";
@@ -19,5 +20,6 @@ export default defineContentScript({
     installHotkeys();
     installTooltipOverrides();
     installHelpDialogOverride();
+    installContextMenu();
   }
 });
