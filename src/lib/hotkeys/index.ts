@@ -1,7 +1,7 @@
 import { isVlcControlsEnabled, onEnabledChange } from "@/lib/enabled-flag";
 import { installAspectRatioReset, resetAspectRatio } from "@/lib/hotkeys/actions/aspect-ratio";
 import { showAllControls } from "@/lib/hotkeys/actions/controls-visibility";
-import { installPlayerEntryTracking, isEventInside, isKeyForPage } from "@/lib/hotkeys/event-targets";
+import { installPlayerEntryTracking, isEventInside, isKeyForPage, isModifiedKey } from "@/lib/hotkeys/event-targets";
 import { installBezelRegistry } from "@/lib/hotkeys/native/bezel-component";
 import { runAction } from "@/lib/hotkeys/run-action";
 import { resetVolumeBoost } from "@/lib/hotkeys/volume-boost";
@@ -50,6 +50,17 @@ function getTargetPlayer(e: KeyboardEvent) {
   return player;
 }
 
+// YouTube's player reads Alt+Arrow as a plain arrow, so a VLC combo left to the browser (Alt+Left goes back) is kept
+// from the focused player, or it would also seek 5 seconds
+function isVlcComboLeftToBrowser(e: KeyboardEvent) {
+  const player = isVlcControlsEnabled() ? getPlayer() : null;
+  const isPlayerFocused = player !== null && isEventInside({
+    e,
+    elContainer: player
+  });
+  return isPlayerFocused && isModifiedKey(e) && findBindings(e).length > 0;
+}
+
 function isBindingActive({ binding, player, e }: {
   binding: VlcBinding;
   player: YoutubePlayer;
@@ -86,6 +97,11 @@ function onKeyDown(e: KeyboardEvent) {
   isAfterMusicNavigationPrefix = isMusicSite() && isMusicNavigationPrefix(e);
   const player = getTargetPlayer(e);
   const isShortsNavigation = player !== null && isShortsPlayer(player) && isShortsNavigationKey(e);
+  if (!player && isVlcComboLeftToBrowser(e)) {
+    swallow(e);
+    return;
+  }
+
   if (!player || isShortsNavigation || isMusicNavigation) {
     return;
   }

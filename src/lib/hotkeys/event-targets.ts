@@ -69,7 +69,7 @@ function onTabKeyUp(e: KeyboardEvent) {
   isPlayerEnteredByViewer = isInsideAnyPlayer(getFocusedElement());
 }
 
-function isModifiedKey(e: KeyboardEvent) {
+export function isModifiedKey(e: KeyboardEvent) {
   return e.ctrlKey || e.altKey || e.metaKey;
 }
 
