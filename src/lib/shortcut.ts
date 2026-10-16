@@ -32,12 +32,24 @@ const KEY_DISPLAY_NAMES: Record<string, string> = {
   PageDown: "PAGE DOWN"
 };
 
-// YouTube writes a shifted symbol next to the key it is typed on (US layout): "< (SHIFT+,)". "+" is also matched
-// as typed on the numpad, with no Shift
+// YouTube writes a shifted symbol next to the key it is typed on (US layout): "< (SHIFT+,)"
 const SHIFTED_SYMBOL_BASE_KEYS: Record<string, string> = {
   "<": ",",
   ">": ".",
   "+": "="
+};
+
+// The physical key each unshifted symbol sits on (US layout), so a combo matches on any keyboard layout and the
+// numpad's + and - stay keys of their own
+const SYMBOL_CODES: Record<string, string> = {
+  " ": "Space",
+  ",": "Comma",
+  ".": "Period",
+  "-": "Minus",
+  "=": "Equal",
+  ";": "Semicolon",
+  "[": "BracketLeft",
+  "]": "BracketRight"
 };
 
 export function getShiftedSymbolBaseKey(key: string) {
@@ -55,9 +67,26 @@ export const MODIFIER_JOINER = " + ";
 
 const COMBO_SEPARATOR = " or ";
 
-// Shifted symbols ("+") need Shift to type, so Shift only counts for letters and named keys
-function isShiftSignificant(key: string) {
-  return key.length > 1 || key.toLowerCase() !== key.toUpperCase();
+function isNamedKey(key: string) {
+  return key.length > 1;
+}
+
+// A shifted symbol ("+") is typed with Shift on its base key ("=")
+function isComboShifted(combo: KeyCombo) {
+  return Boolean(combo.isShift) || getShiftedSymbolBaseKey(combo.key) !== undefined;
+}
+
+function getCharacterCode(key: string) {
+  const typedOnKey = getShiftedSymbolBaseKey(key) ?? key;
+  return isLetter(typedOnKey) ? `Key${typedOnKey.toUpperCase()}` : SYMBOL_CODES[typedOnKey];
+}
+
+// Named keys (arrows, Page Up) keep their name on every layout, and on the numpad with Num Lock off
+function isSameKey({ combo, e }: {
+  combo: KeyCombo;
+  e: KeyboardEvent;
+}) {
+  return isNamedKey(combo.key) ? e.key === combo.key : e.code === getCharacterCode(combo.key);
 }
 
 function isCtrlAltMatch({ combo, e }: {
@@ -71,9 +100,11 @@ export function isComboMatch({ combo, e }: {
   combo: KeyCombo;
   e: KeyboardEvent;
 }) {
-  const isSameKey = e.key.toLowerCase() === combo.key.toLowerCase();
-  const isShiftMatch = !isShiftSignificant(combo.key) || e.shiftKey === Boolean(combo.isShift);
-  return isSameKey && isShiftMatch && isCtrlAltMatch({
+  const isShiftMatch = e.shiftKey === isComboShifted(combo);
+  return isSameKey({
+    combo,
+    e
+  }) && isShiftMatch && isCtrlAltMatch({
     combo,
     e
   });
@@ -105,8 +136,7 @@ function formatCombo({ combo, style }: {
   const key = formatKeyName(combo.key);
   const shiftedSymbolBaseKey = getShiftedSymbolBaseKey(combo.key);
   const typedOnKey = isLetter(combo.key) ? key : shiftedSymbolBaseKey;
-  const isShifted = Boolean(combo.isShift) || shiftedSymbolBaseKey !== undefined;
-  const isShiftOnly = isShifted && !combo.isCtrl && !combo.isAlt;
+  const isShiftOnly = isComboShifted(combo) && !combo.isCtrl && !combo.isAlt;
   if (isShiftOnly && typedOnKey) {
     const shiftedKey = `${MODIFIER_NAMES.shift}+${typedOnKey}`;
     return style === ShortcutStyle.Dialog ? `${combo.key.toUpperCase()} (${shiftedKey})` : shiftedKey;
