@@ -54,6 +54,10 @@ export interface YoutubePlayer extends HTMLElement {
   hideControls?(): void;
   showControls?(): void;
   getSphericalProperties?(): unknown;
+  getPlaybackQuality?(): string;
+  getPreferredQuality?(): string;
+  getAvailableQualityData?(): unknown;
+  setPlaybackQualityRange?(minimumQuality: string, maximumQuality: string): void;
 }
 
 function isFunctionValue(value: unknown) {
