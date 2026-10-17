@@ -97,7 +97,7 @@ export const CHOICE_ROWS: ChoiceRowModel[] = [
 function createActionRow({ id, action, run }: {
   id: MenuRow;
   action: VlcAction;
-  run: (player: YoutubePlayer) => void;
+  run: CommandRowModel["run"];
 }): CommandRowModel {
   return {
     id,
